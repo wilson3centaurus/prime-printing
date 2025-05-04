@@ -1,0 +1,115 @@
+from flask import Flask, request, jsonify
+from paynow import Paynow
+import random
+import logging
+
+app = Flask(__name__)
+logging.basicConfig(level=logging.DEBUG)
+
+# Configure Paynow
+PAYNOW_INTEGRATION_ID = '20770'
+PAYNOW_INTEGRATION_KEY = 'dffcc368-b425-49ae-b849-a96081a30c69'
+PAYNOW_RETURN_URL = 'http://localhost:5000/payment_return'
+PAYNOW_RESULT_URL = 'http://localhost:5000/payment_update'
+
+paynow = Paynow(PAYNOW_INTEGRATION_ID, PAYNOW_INTEGRATION_KEY, PAYNOW_RETURN_URL, PAYNOW_RESULT_URL)
+
+# Simulated DB for demo
+payments = {}
+
+# Test endpoint
+@app.route('/test_payload')
+def test_payload():
+    txn_id = f"TX{random.randint(1000, 9999)}"
+    data = {
+        'txn_id': txn_id,
+        'amount': 0.70,
+        'status': 'pending',
+        'message': 'Please complete payment via EcoCash'
+    }
+    payments[txn_id] = data
+    logging.debug(f"Test payload created: {data}")
+    return jsonify(data)
+
+# Initiate real payment
+@app.route('/print', methods=['POST'])
+def initiate_print_payment():
+    try:
+        data = request.get_json()
+        user_id = data['user_id']
+        pages = int(data['pages'])
+        amount = round(pages * 0.10, 2)
+        txn_id = f"TX{random.randint(1000, 9999)}"
+
+        logging.debug(f"Received print request: user_id={user_id}, pages={pages}, amount={amount}")
+
+        # Create Paynow payment
+        payment = paynow.create_payment(txn_id, f"{user_id}@example.com")
+        payment.add('Document Printing', amount)
+
+        response = paynow.send(payment)
+
+        if response.success:
+            payment_data = {
+                'txn_id': txn_id,
+                'status': 'pending',
+                'message': 'Redirect user to payment_url',
+                'amount': amount,
+                'payment_url': response.redirect_url,
+                'poll_url': response.poll_url
+            }
+            payments[txn_id] = payment_data
+            logging.debug(f"Paynow Payment initiated: {payment_data}")
+            return jsonify(payment_data)
+        else:
+            logging.error("Paynow initiation failed: " + response.errors)
+            return jsonify({'error': 'Payment failed to initiate', 'details': response.errors}), 500
+
+    except Exception as e:
+        logging.exception("Error initiating print payment")
+        return jsonify({'error': str(e)}), 500
+
+# Confirm payment (simulated poll or Paynow callback)
+@app.route('/confirm_payment', methods=['POST'])
+def confirm_payment():
+    try:
+        data = request.get_json()
+        txn_id = data.get('txn_id')
+        payment_data = payments.get(txn_id)
+
+        if not payment_data:
+            logging.warning(f"Transaction ID {txn_id} not found")
+            return jsonify({'error': 'Transaction ID not found'}), 404
+
+        logging.debug(f"Polling Paynow for txn_id={txn_id}")
+        poll_url = payment_data.get('poll_url')
+
+        if not poll_url:
+            return jsonify({'error': 'No poll_url found for transaction'}), 500
+
+        response = paynow.poll_transaction(poll_url)
+        if response.status == 'Paid':
+            payment_data['status'] = 'confirmed'
+            logging.info(f"Payment confirmed for txn_id={txn_id}")
+            return jsonify({'txn_id': txn_id, 'status': 'confirmed', 'message': 'Payment confirmed successfully'})
+        else:
+            logging.info(f"Payment not yet confirmed for txn_id={txn_id}, status={response.status}")
+            return jsonify({'txn_id': txn_id, 'status': response.status, 'message': 'Payment not yet confirmed'})
+
+    except Exception as e:
+        logging.exception("Error confirming payment")
+        return jsonify({'error': str(e)}), 500
+
+# Webhook handlers if needed
+@app.route('/payment_return')
+def payment_return():
+    logging.debug("User returned after payment")
+    return "Payment complete. You may close this window."
+
+@app.route('/payment_update')
+def payment_update():
+    logging.debug("Paynow server sent result update.")
+    return "OK"
+
+if __name__ == '__main__':
+    app.run(debug=True)

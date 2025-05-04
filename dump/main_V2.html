@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Centaurus Inc. - Prime Printing</title>
+  <style>
+    :root {
+      --deep-blue: #0a192f;
+      --light-blue: #64ffda;
+      --white: #ffffff;
+      --gray: #ccd6f6;
+      --red: #ff4b5c;
+      --green: #4caf50;
+    }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    body, html {
+      height: 100%;
+      background-color: var(--deep-blue);
+      color: var(--gray);
+    }
+    .splash-screen, .main-screen, .usb-screen, .preview-screen {
+      display: none;
+      height: 100vh;
+      width: 100vw;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .active {
+      display: flex;
+    }
+    .logo {
+      font-size: 3rem;
+      font-weight: bold;
+      color: var(--light-blue);
+    }
+    .motto {
+      margin-top: 10px;
+      font-size: 1.2rem;
+    }
+    .loading-bar {
+      margin-top: 50px;
+      width: 80%;
+      height: 10px;
+      background: #112240;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .loading-progress {
+      height: 100%;
+      background: var(--light-blue);
+      width: 0%;
+      transition: width 10s linear;
+    }
+    .navbar {
+      position: absolute;
+      top: 0;
+      width: 100%;
+      background: #112240;
+      padding: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--white);
+    }
+    .nav-logo {
+      font-size: 1.5rem;
+      color: var(--light-blue);
+    }
+    .nav-icons {
+      display: flex;
+      gap: 15px;
+    }
+    .section {
+      margin-top: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .actions {
+      display: flex;
+      gap: 30px;
+      margin: 30px 0;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .action-box {
+      background: #1d3557;
+      padding: 20px;
+      border-radius: 10px;
+      width: 250px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .action-box:hover {
+      background: #2c3e50;
+    }
+    .status {
+      display: flex;
+      gap: 15px;
+      margin-top: 30px;
+    }
+    .status span {
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .green { background-color: var(--green); color: #000; }
+    .red { background-color: var(--red); color: #fff; }
+  </style>
+</head>
+<body>
+  <!-- Splash Screen -->
+  <div class="splash-screen active" id="splash">
+    <div class="logo">Centaurus Inc.</div>
+    <div class="motto">"Life Runs on Code"</div>
+    <div style="margin-top: 20px;">Powered by Raspberry Pi & Linux</div>
+    <div class="loading-bar">
+      <div class="loading-progress" id="loadingBar"></div>
+    </div>
+  </div>
+
+  <!-- Main Screen -->
+  <div class="main-screen" id="main">
+    <div class="navbar">
+      <div class="nav-logo">Centaurus Inc.</div>
+      <div class="nav-icons">
+        <span onclick="showHelp()">❓ Help</span>
+        <span>👤</span>
+      </div>
+    </div>
+    <div class="section">
+      <h1>Welcome to Prime Printing Service</h1>
+      <div class="actions">
+        <div class="action-box">🔌 Insert USB Drive</div>
+        <div class="action-box">📡 Send via Bluetooth</div>
+        <div class="action-box">✨ Coming Soon</div>
+      </div>
+      <div class="status">
+        <span class="green">System OK</span>
+        <span class="green">Paper Ready</span>
+        <span class="red">Network Down</span>
+        <span class="green">Bluetooth Ready</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const splash = document.getElementById("splash");
+    const main = document.getElementById("main");
+    const loadingBar = document.getElementById("loadingBar");
+
+    // Simulate splash screen duration
+    window.onload = () => {
+      loadingBar.style.width = "100%";
+      setTimeout(() => {
+        splash.classList.remove("active");
+        main.classList.add("active");
+      }, 10000); // 10 seconds
+    };
+
+    function showHelp() {
+      alert("To print:\n1. Insert your USB drive to browse and print documents.\n2. Or send your file using Bluetooth.\n3. Mobile App: https://bit.ly/printapp (Scan QR on screen).");
+    }
+  </script>
+</body>
+</html>

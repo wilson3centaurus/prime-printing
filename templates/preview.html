@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preview - Centaurus Inc.</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="/static/js/pdf.js"></script>
+</head>
+<body>
+    <div class="navbar">
+        <div class="nav-brand">
+            <img src="/static/icons/occult-sun.png" alt="Logo">
+            <div class="logo">Centaurus Inc.</div>
+        </div>
+    </div>
+
+    <div class="preview-container">
+        <div class="preview-header">
+            <button class="back-btn" onclick="window.history.back()">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <h2 id="filename"></h2>
+        </div>
+
+        <div class="preview-content">
+            <!-- PDF will render here -->
+            <canvas id="pdf-viewer"></canvas>
+            
+            <!-- Image preview (hidden by default) -->
+            <img id="image-preview" style="display: none; max-width: 100%;">
+            
+            <!-- Office file placeholder -->
+            <div id="office-preview" class="unsupported-file">
+                <i class="far fa-file-alt file-icon-large"></i>
+                <h3>Document Preview</h3>
+                <p>Direct preview not available for this file type</p>
+                <p>You can still print the document</p>
+            </div>
+        </div>
+
+        <div class="preview-actions">
+            <button class="print-btn" onclick="printFile()">
+                <i class="fas fa-print"></i> Print
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const filepath = decodeURIComponent("{{ filename }}");
+        const filename = filepath.split('/').pop();
+        const fileExt = filename.split('.').pop().toLowerCase();
+
+        document.getElementById('filename').textContent = filename;
+
+        // Handle different file types
+        if (fileExt === 'pdf') {
+            loadPDF(filepath);
+        } 
+        else if (['jpg', 'png'].includes(fileExt)) {
+            document.getElementById('image-preview').src = filepath;
+            document.getElementById('image-preview').style.display = 'block';
+            document.getElementById('pdf-viewer').style.display = 'none';
+            document.getElementById('office-preview').style.display = 'none';
+        }
+        else {
+            document.getElementById('pdf-viewer').style.display = 'none';
+            document.getElementById('office-preview').style.display = 'block';
+        }
+
+        function loadPDF(path) {
+            pdfjsLib.getDocument(path).promise.then(pdf => {
+                pdf.getPage(1).then(page => {
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    const canvas = document.getElementById('pdf-viewer');
+                    const context = canvas.getContext('2d');
+                    
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    
+                    page.render({
+                        canvasContext: context,
+                        viewport: viewport
+                    });
+                });
+            });
+        }
+
+        function printFile() {
+            fetch(`/print/${encodeURIComponent(filepath)}`)
+                .then(response => response.json())
+                .then(data => {
+                    alert("File sent to printer!");
+                });
+        }
+    </script>
+</body>
+</html>

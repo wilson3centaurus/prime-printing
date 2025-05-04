@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document Preview</title>
+    <script src="/static/js/pdf.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/pdf_preview.css">
+</head>
+<body>
+    <div id="header">
+        <h2 class="text-xl font-bold">{{ filename }} <span class="file-type-badge">PDF Preview</span></h2>
+    </div>
+    <div id="pdf-container"></div>
+    <div class="floating-actions">
+        <button class="floating-btn" onclick="window.history.back()">
+            <i class="fas fa-arrow-left"></i> Back
+        </button>
+        <button id="print-btn" class="floating-btn">
+            <i class="fas fa-print"></i> Print
+        </button>
+    </div>
+
+    <!-- Pay-to-Print Modal -->
+    <div id="print-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="modal-content w-full max-w-2xl">
+            <div class="modal-header">
+                <h2 class="text-2xl font-bold">🖨️ Prime Systems Pay-to-Print</h2>
+            </div>
+            
+            <div class="p-6">
+                <!-- Document Summary -->
+                <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">Document Summary</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-gray-600">Total Pages:</p>
+                            <p class="text-lg font-semibold text-gray-800"><span id="totalPages">0</span></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Cost per Page:</p>
+                            <p class="text-lg font-semibold text-gray-800">$<span id="costPerPage">1.20</span></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Selected Pages:</p>
+                            <p class="text-lg font-semibold text-gray-800"><span id="selectedPages">All</span></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Total Cost:</p>
+                            <p class="text-lg font-semibold text-blue-600">$<span id="totalCost">0.00</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Options -->
+                <form id="printForm" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block font-medium text-gray-700 mb-1">Select Pages:</label>
+                            <input type="text" id="pagesInput" name="pages" placeholder="e.g., 1,2,5 or odd or even" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block font-medium text-gray-700 mb-1">Number of Copies:</label>
+                            <input type="number" id="copiesInput" name="copies" value="1" min="1" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Orientation:</label>
+                        <select name="orientation" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="portrait" selected>Portrait</option>
+                            <option value="landscape">Landscape</option>
+                        </select>
+                    </div>
+
+                    <!-- Payment Section -->
+                    <div class="border-t pt-4 mt-4">
+                        <h3 class="text-lg font-semibold mb-3 text-gray-700">Payment Method</h3>
+                        <div class="payment-option">
+                            <div>
+                                <label class="block font-medium text-gray-700 mb-1">EcoCash Number:</label>
+                                <input type="text" name="ecocash" placeholder="077xxxxxxx" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block font-medium text-gray-700 mb-1">Print Pass:</label>
+                                <input type="text" name="printpass" placeholder="Enter print pass" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="submit-btn mt-6">
+                        Proceed to Pay & Print <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                    <div class="font-family-oswald mt-2 text-center fs-6 text-info opacity-75">
+                        © 2025 Centaurus Inc. | v1.0.0 | Prime Printing System
+                    </div>
+                </form>
+
+                <!-- Status Area -->
+                <div id="statusBox" class="hidden mt-6 text-center p-4 bg-blue-50 rounded-lg">
+                    <div class="flex justify-center mb-3">
+                        
+                        <svg class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v4m0 8v4m8-8h-4M4 12H0m16.24-4.24l-2.83 2.83M7.76 7.76l2.83 2.83m0 0l2.83 2.83M7.76 16.24l2.83-2.83" />
+                        </svg>
+                    </div>
+                    <p id="statusText" class="text-lg font-medium text-gray-700">Processing payment...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // PDF Viewer Initialization
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/js/pdf.worker.js';
+        const url = "{{ file_url }}";
+        const container = document.getElementById('pdf-container');
+        let totalPages = 0;
+        const costPerPage = 0.10;
+        
+        // Initialize cost per page display
+        document.getElementById('costPerPage').textContent = costPerPage.toFixed(2);
+
+        // Load PDF
+        pdfjsLib.getDocument(url).promise.then(pdf => {
+            totalPages = pdf.numPages;
+            document.getElementById("totalPages").textContent = totalPages;
+            updateCost(); // Initialize cost calculation
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                pdf.getPage(i).then(page => {
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    const canvas = document.createElement('canvas');
+                    const div = document.createElement('div');
+                    div.className = 'page-container';
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    div.appendChild(canvas);
+                    container.appendChild(div);
+                    page.render({
+                        canvasContext: canvas.getContext('2d'),
+                        viewport: viewport
+                    });
+                });
+            }
+        }).catch(error => {
+            console.error("PDF loading error:", error);
+            container.innerHTML = `
+                <div class="error-container text-center">
+                    <div class="error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <h2 class="text-xl font-bold mb-4">Could not preview "{{ filename }}"</h2>
+                    <div class="mt-6">
+                        <button class="btn" onclick="window.history.back()"><i class="fas fa-arrow-left"></i> Go Back</button>
+                        <button class="btn" onclick="window.location.reload()"><i class="fas fa-sync-alt"></i> Try Again</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        // Modal and Form Elements
+        const printBtn = document.getElementById('print-btn');
+        const printModal = document.getElementById('print-modal');
+        const printForm = document.getElementById('printForm');
+        const statusBox = document.getElementById('statusBox');
+        const statusText = document.getElementById('statusText');
+        const pagesInput = document.getElementById('pagesInput');
+        const copiesInput = document.getElementById('copiesInput');
+        
+        // Show modal when print button is clicked
+        printBtn.addEventListener('click', () => {
+            printModal.classList.remove('hidden');
+            printModal.classList.add('flex');
+        });
+        
+        // Real-time cost calculation
+        pagesInput.addEventListener('input', updateCost);
+        copiesInput.addEventListener('input', updateCost);
+        
+        // Submit handler
+        printForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+        
+            const formData = {
+                copies: parseInt(copiesInput.value) || 1,
+                pages: pagesInput.value.trim().toLowerCase(),
+                orientation: printForm.orientation.value,
+                ecocash: printForm.ecocash.value.trim(),
+                printpass: printForm.printpass.value.trim(),
+                filename: "{{ filename }}",
+                filepath: "{{ file_url }}",
+                totalPages: totalPages
+            };
+        
+            // Validate EcoCash number (Zimbabwe format)
+            if (!/^07[78]\d{7}$/.test(formData.ecocash)) {
+                alert('Please enter a valid Zimbabwean EcoCash number (077/078 followed by 7 digits)');
+                return;
+            }
+        
+            // Validate minimum payment amount
+            const pageSelection = parsePageSelection(formData.pages, totalPages);
+            const totalCost = pageSelection.count * formData.copies * costPerPage;
+        
+            // Show loading state
+            printForm.style.display = 'none';
+            statusBox.classList.remove('hidden');
+            statusText.innerHTML = `
+                <div class="text-center">
+                    <!--<i class="fas fa-spinner fa-spin text-blue-500 text-2xl mb-2"></i>-->
+                    <p>Processing your payment request...</p>
+                </div>
+            `;
+        
+            try {
+                const response = await fetch('/process-print', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+        
+                const result = await response.json();
+                
+                console.log("Payment API Response:", result);
+        
+                if (!result.success) {
+                    throw new Error(result.error || "Payment processing failed");
+                }
+        
+                // Verify redirect_url exists and is valid
+                if (!result.redirect_url || typeof result.redirect_url !== 'string') {
+                    throw new Error("Payment gateway did not provide a valid redirect URL");
+                }
+        
+                // Redirect to Paynow payment page
+                window.location.href = result.redirect_url;
+        
+            } catch (error) {
+                statusText.innerHTML = `
+                    <div class="text-red-600 p-4 bg-red-50 rounded-lg">
+                        <i class="fas fa-exclamation-circle mr-2"></i>
+                        ${error.message}
+                    </div>
+                    <button onclick="resetForm()" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded">
+                        Try Again
+                    </button>
+                `;
+            }
+        });
+        
+        // Update cost calculation in real-time
+        function updateCost() {
+            if (totalPages === 0) return;
+            
+            const pagesInputValue = pagesInput.value.trim().toLowerCase();
+            const copies = parseInt(copiesInput.value) || 1;
+            
+            const selection = parsePageSelection(pagesInputValue, totalPages);
+            const totalCost = (selection.count * copies * costPerPage).toFixed(2);
+            
+            document.getElementById("totalCost").textContent = totalCost;
+            document.getElementById("selectedPages").textContent = selection.description || "All";
+        }
+        
+        // Parse page selection string
+        function parsePageSelection(pagesInput, total) {
+            if (!pagesInput || pagesInput === "all") {
+                return {
+                    count: total,
+                    description: "All pages",
+                    pages: Array.from({length: total}, (_, i) => i + 1)
+                };
+            }
+            
+            if (pagesInput === "odd") {
+                const pages = Array.from({length: total}, (_, i) => i + 1).filter(p => p % 2 === 1);
+                return {
+                    count: pages.length,
+                    description: "Odd pages",
+                    pages: pages
+                };
+            }
+            
+            if (pagesInput === "even") {
+                const pages = Array.from({length: total}, (_, i) => i + 1).filter(p => p % 2 === 0);
+                return {
+                    count: pages.length,
+                    description: "Even pages",
+                    pages: pages
+                };
+            }
+            
+            // Handle complex page selections (1,3,5-8, etc.)
+            const pages = new Set();
+            const parts = pagesInput.split(',');
+            let descriptionParts = [];
+            
+            for (const part of parts) {
+                const trimmed = part.trim();
+                if (trimmed.includes('-')) {
+                    const [start, end] = trimmed.split('-').map(Number);
+                    if (!isNaN(start) && !isNaN(end) && start <= end) {
+                        for (let i = start; i <= end; i++) {
+                            if (i > 0 && i <= total) pages.add(i);
+                        }
+                        descriptionParts.push(`${start}-${end}`);
+                    }
+                } else {
+                    const num = parseInt(trimmed);
+                    if (!isNaN(num) && num > 0 && num <= total) {
+                        pages.add(num);
+                        descriptionParts.push(num.toString());
+                    }
+                }
+            }
+            
+            return {
+                count: pages.size,
+                description: descriptionParts.join(", "),
+                pages: Array.from(pages).sort((a, b) => a - b)
+            };
+        }
+        
+        // Reset form after error
+        function resetForm() {
+            printForm.style.display = 'block';
+            statusBox.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

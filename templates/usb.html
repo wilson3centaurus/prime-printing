@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centaurus Inc. | USB Printing</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200..700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Oswald:wght@200..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        :root {
+            --primary: #0a192f;
+            --secondary: #172a45;
+            --accent: #64ffda;
+            --text: #e6f1ff;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--primary);
+            color: var(--text);
+            font-family: 'Montserrat', Arial, sans-serif;
+        }
+        
+        .navbar {
+            position: fixed; /* Makes navbar stay in place */
+            top: 0;          /* Positions at the very top */
+            left: 0;         /* Aligns to left edge */
+            right: 0;        /* Stretches to right edge */
+            z-index: 1000;   /* Ensures it stays above other content */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--secondary);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            font-family: 'Oswald', Arial, sans-serif;
+            border-radius: 5px;
+        }
+        
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #a19e9e;
+        }
+        
+        .nav-icons i {
+            font-size: 25px;
+            cursor: pointer;
+            margin-left: 15px;
+            color: var(--accent);
+        }
+        
+        .main {
+            padding: 2rem;
+            max-width: 1000px;
+            margin: 0 auto;
+            margin-top: 60px;
+        }
+        
+        .header {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
+            text-align: center;
+        }
+        
+        .usb-status {
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+        }
+        
+        .file-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 2rem;
+            background: var(--secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .file-table th {
+            background: #1a365d;
+            padding: 12px 15px;
+            text-align: left;
+        }
+        
+        .file-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .file-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .file-table tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .file-icon {
+            margin-right: 8px;
+            font-size: 1.1rem;
+            color: var(--accent);
+        }
+        
+        .file-btn {
+            background: var(--accent);
+            color: var(--primary);
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .file-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        .no-files {
+            text-align: center;
+            padding: 2rem;
+            color: #aaa;
+        }
+        
+        .note {
+            font-family: 'Oswald', Arial, sans-serif;
+            margin-top: 2rem;
+            font-size: 20px;
+            opacity: 0.7;
+            text-align: center;
+            color: #64ffda;
+        }
+        .info {
+            font-size: 15px;
+            color: #a19e9e;
+        }
+        
+        .connected {
+            color: var(--accent);
+        }
+        
+        .disconnected {
+            color: #ff5555;
+        }
+        img {
+            width: 50px;
+            height: 50px;
+            margin-right: -10px;
+            margin-bottom: -2px;
+        }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #a19e9e;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="nav-brand">
+            <img src="/static/icons/occult-sun.png" alt="Logo" width="40">
+            <div class="logo">Centaurus Inc.</div>
+        </div>
+        <div class="nav-icons">
+            <i class="fa fa-sync-alt" id="refreshBtn" title="Refresh"></i>
+            <i class="fa fa-question-circle" id="helpBtn" title="Help"></i>
+            <i class="fa fa-user-circle" id="accountBtn" title="Account"></i>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="header">Prime Printing System</div>
+        <div class="usb-status" id="usbStatus">
+            <span class="disconnected">Connecting.....</span>
+        </div>
+        
+        <table class="file-table">
+            <thead>
+                <tr>
+                    <th>File</th>
+                    <th>Type</th>
+                    <th>Pages</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="fileList">
+                <tr>
+                    <td colspan="4" class="no-files">Please wait patiently while your usb is being connected!</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="note">
+            ⚠️ <strong>NOTE:</strong> You can't edit files here. Only PDF, Word, and image files can be printed. ⚠️
+        </div>
+        <div class="note info">© 2025 Centaurus Inc. | v1.0.0 | Prime Printing System</div>
+
+    </div>
+     <!-- Help Modal -->
+     <div id="helpModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 1000; justify-content: center; align-items: center; font-family: 'Montserrat', sans-serif;">
+        <div style="background: var(--secondary); padding: 2rem; border-radius: 10px; max-width: 600px; margin: 50px; overflow-y: auto; max-height: 90vh;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 style="margin: 0; color: var(--accent);">📚 Prime Printing Help Center</h2>
+                <button onclick="document.getElementById('helpModal').style.display = 'none'" style="background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+            
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--accent); border-bottom: 1px solid var(--accent); padding-bottom: 0.5rem;">🖨️ Printing Options</h3>
+                
+                <div style="background: rgba(100, 255, 218, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <h4 style="margin-top: 0; color: var(--accent);">1. USB Printing</h4>
+                    <ol style="padding-left: 1.5rem; margin-bottom: 0;">
+                        <li>Insert your USB drive into the computer</li>
+                        <li>Supported files will appear automatically (PDF, Word, JPEG, PNG)</li>
+                        <li>Click "Open/Print" next to any file to preview and print</li>
+                        <li>Use the refresh button if files don't appear immediately</li>
+                    </ol>
+                </div>
+                
+                <div style="background: rgba(100, 255, 218, 0.1); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                    <h4 style="margin-top: 0; color: var(--accent);">2. Bluetooth Printing</h4>
+                    <ol style="padding-left: 1.5rem; margin-bottom: 0;">
+                        <li>Enable Bluetooth on your device</li>
+                        <li>Pair with "PrimePrint-01" (PIN: 0000)</li>
+                        <li>Send files directly from your device</li>
+                        <li>Files will appear in the print queue automatically</li>
+                    </ol>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--accent); border-bottom: 1px solid var(--accent); padding-bottom: 0.5rem;">📱 Mobile Printing</h3>
+                <div style="background: rgba(100, 255, 218, 0.1); padding: 1rem; border-radius: 8px;">
+                    <p>To print from your mobile device:</p>
+                    <p><strong>Type this link into your browser to download the app:</strong></p>
+                    <div style="background: var(--primary); padding: 1rem; border-radius: 5px; word-break: break-all; margin: 1rem 0;">
+                        https://centaurus-inc.com/primeprint
+                    </div>
+                    <p style="text-align: center; margin-bottom: 0.5rem;">- OR -</p>
+                    <div style="text-align: center;">
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://centaurus-inc.com/primeprint" 
+                            alt="QR Code" 
+                            style="border: 2px solid var(--accent); border-radius: 8px;">
+                        <p style="margin-top: 0.5rem;">Scan this QR code with your phone's camera</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 1rem;">
+                <h3 style="color: var(--accent); border-bottom: 1px solid var(--accent); padding-bottom: 0.5rem;">❓ Troubleshooting</h3>
+                <div style="background: rgba(255, 85, 85, 0.1); padding: 1rem; border-radius: 8px;">
+                    <p><strong>No files showing up?</strong></p>
+                    <ul style="padding-left: 1.5rem; margin-bottom: 0.5rem;">
+                        <li>Ensure your USB is properly inserted</li>
+                        <li>Files must be PDF, Word (.docx), or images (.jpg, .png)</li>
+                        <li>Try the refresh button</li>
+                    </ul>
+                    
+                    <p><strong>Print quality issues?</strong></p>
+                    <ul style="padding-left: 1.5rem; margin-bottom: 0;">
+                        <li>Check paper is loaded correctly</li>
+                        <li>Use original file formats for best quality</li>
+                        <li>Contact support if problems persist</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 1.5rem;">
+                <button onclick="document.getElementById('helpModal').style.display = 'none'" 
+                        style="background: var(--accent); color: var(--primary); border: none; padding: 0.75rem 1.5rem; border-radius: 30px; cursor: pointer; font-weight: bold; font-size: 1rem; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-check"></i> Got It!
+                </button>
+            </div>
+            
+            <div style="text-align: center; margin-top: 1.5rem; font-size: 0.9rem; color: var(--text); opacity: 0.7;">
+                Need more help? Contact support@centaurus-inc.com or +263787209882
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        document.getElementById("helpBtn").addEventListener("click", () => {
+            document.getElementById("helpModal").style.display = "flex";
+        });
+    </script>
+</body>
+</html>

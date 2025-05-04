@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Preview</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        #header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        #docx-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .page-container {
+            margin-bottom: 20px;
+            background: white;
+            padding: 30px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            line-height: 1.6;
+        }
+
+        .floating-actions {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+        }
+
+        .floating-btn {
+            background: #172a45;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .floating-btn:hover {
+            background: #64ffda;
+            color: #0a192f;
+        }
+
+        .file-type-badge {
+            background: #64ffda;
+            color: #0a192f;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+
+        @media print {
+            #header, .floating-actions {
+                display: none !important;
+            }
+
+            body {
+                padding: 0;
+                background: none;
+            }
+
+            .page-container {
+                margin-bottom: 0;
+                box-shadow: none;
+                page-break-after: always;
+            }
+
+            .page-container:last-child {
+                page-break-after: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h2>{{ filename }} <span class="file-type-badge">DOCX Preview</span></h2>
+    </div>
+
+    <div id="docx-container">
+        <div class="page-container">
+            {{ html_content | safe }}
+        </div>
+    </div>
+
+    <div class="floating-actions">
+        <button class="floating-btn" onclick="window.history.back()">
+            <i class="fas fa-arrow-left"></i> Back
+        </button>
+        <button class="floating-btn" onclick="window.print()">
+            <i class="fas fa-print"></i> Print
+        </button>
+    </div>
+</body>
+</html>

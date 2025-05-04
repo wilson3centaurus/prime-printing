@@ -1,0 +1,490 @@
+app.py:
+`
+from flask import Flask, render_template, jsonify, send_file, request
+import os
+import base64
+from PyPDF2 import PdfReader
+import mammoth
+from printing_system import PrintingSystem
+
+DATABASE = 'print_jobs.db'
+
+#app = Flask(__name__, static_folder='static', template_folder='templates')
+USB_PATH = "/media/xo/AUDREY"
+
+app = Flask(__name__)
+
+# Initialize printing system
+printing_system = PrintingSystem(app)
+
+@app.route('/process-print', methods=['POST'])
+def process_print():
+    data = request.get_json()
+    result = app.printing_system.process_print_request(data)
+    
+    if result['success']:
+        return jsonify({
+            'status': 'redirect',
+            'redirect_url': result['redirect_url'],
+            'reference': result['reference']
+        }), 200
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': result['error']
+        }), 400
+
+@app.route('/payment-callback', methods=['POST'])
+def payment_callback():
+    """Paynow will POST payment status here"""
+    data = request.form
+    reference = data.get('reference')
+    
+    # Verify hash
+    expected_hash = app.printing_system.ecocash._generate_hash([
+        data.get('paynowreference'),
+        data.get('amount'),
+        data.get('reference'),
+        data.get('status'),
+        data.get('pollurl')
+    ])
+    
+    if data.get('hash') != expected_hash:
+        return jsonify({'status': 'invalid hash'}), 400
+    
+    # Update database
+    app.printing_system._update_print_job(
+        reference,
+        {
+            'status': data.get('status'),
+            'payment_reference': data.get('paynowreference'),
+            'poll_url': data.get('pollurl')
+        }
+    )
+    
+    if data.get('status') == 'Paid':
+        app.printing_system.execute_print_job(reference)
+    
+    return jsonify({'status': 'received'}), 200
+
+@app.route('/payment-complete')
+def payment_complete():
+    """User gets redirected here after payment"""
+    reference = request.args.get('reference')
+    status = request.args.get('status')
+    
+    return render_template('payment_complete.html',
+        reference=reference,
+        status=status,
+        success=status == 'Paid'
+    )
+
+@app.route('/')
+def dashboard():
+    return render_template('dashboard.html')
+
+@app.route('/usb')
+def usb():
+    return render_template('usb.html')
+
+@app.route('/<page>')
+def serve_page(page):
+    if page.endswith('.html'):
+        return send_from_directory('templates', page)
+    return "Not found", 404
+
+def decode_path(encoded):
+    try:
+        return base64.b64decode(encoded).decode('utf-8')
+    except:
+        return None
+
+@app.route('/files')
+def list_files():
+    files = []
+    if os.path.exists(USB_PATH):
+        for root, _, filenames in os.walk(USB_PATH):
+            for f in filenames:
+                full_path = os.path.join(root, f)
+                ext = f.split('.')[-1].lower()
+                files.append({
+                    "name": f,
+                    "path": full_path,
+                    "type": ext,
+                    "pages": "--"  # Removed slow page count
+                })
+    return jsonify(sorted(files, key=lambda x: x['name']))
+
+@app.route('/preview/<encoded>')
+def preview_file(encoded):
+    filepath = decode_path(encoded)
+    if not filepath or not os.path.exists(filepath):
+        return "File not found", 404
+
+    ext = filepath.split('.')[-1].lower()
+
+    if ext == 'pdf':
+        return render_template('pdf_preview.html',
+            filename=os.path.basename(filepath),
+            file_url=f"/file/{encoded}"
+        )
+
+    elif ext == 'docx':
+        try:
+            with open(filepath, "rb") as docx_file:
+                result = mammoth.convert_to_html(docx_file)
+                html_content = result.value
+            return render_template("docx_preview.html",
+                filename=os.path.basename(filepath),
+                html_content=html_content)
+        except Exception as e:
+            return f"Error previewing DOCX: {str(e)}", 500
+
+    elif ext in ['jpg', 'jpeg', 'png']:
+        return render_template('image_preview.html',
+            filename=os.path.basename(filepath),
+            file_url=f"/file/{encoded}"
+        )
+
+    return "Unsupported file type", 400
+
+@app.route('/file/<encoded>')
+def serve_file(encoded):
+    filepath = decode_path(encoded)
+    if not filepath or not os.path.exists(filepath):
+        return "File not found", 404
+    return send_file(filepath)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
+`
+
+printing_system.py:
+`import requests
+import hashlib
+import json
+import os
+from datetime import datetime
+import sqlite3
+
+DATABASE = 'print_jobs.db'
+
+class EcoCashPayment:
+    def __init__(self):
+        self.base_url = "https://www.paynow.co.zw/interface"
+        self.merchant_id = os.getenv('PAYNOW_MERCHANT_ID')  # "20767"
+        self.integration_key = os.getenv('PAYNOW_INTEGRATION_KEY')  # "5d424d11-e49c-4012-a288-818054c86b6f"
+    
+    def _generate_hash(self, values):
+        """Generate SHA512 hash for Paynow"""
+        import hashlib
+        concatenated = ''.join(str(v) for v in values) + self.integration_key
+        return hashlib.sha512(concatenated.encode()).hexdigest().upper()
+    
+    def initiate_payment(self, phone, amount, reference, email="tafadzwawilsonsedze@gmail.com"):
+        """Initiate EcoCash payment using Paynow's web interface"""
+        values = {
+            'merchant_id': self.merchant_id,
+            'reference': reference,
+            'amount': amount,
+            'return_url': f"{os.getenv('BASE_URL')}/payment-complete",
+            'result_url': f"{os.getenv('BASE_URL')}/payment-callback",
+            'email': email,
+            'phone': phone,
+            'payment_method': 'ecocash',
+            'additionalinfo': 'Document Printing Payment'
+        }
+        
+        # Generate hash
+        hash_values = [
+            values['merchant_id'],
+            values['reference'],
+            values['amount'],
+            values['return_url'],
+            values['result_url'],
+            values['email'],
+            values['phone'],
+            values['payment_method'],
+            values['additionalinfo']
+        ]
+        values['hash'] = self._generate_hash(hash_values)
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/initiatetransaction",
+                data=values,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                res_json = response.json()
+                return {
+                    'status': 'success',
+                    'redirect_url': res_json.get('browserurl'),
+                    'poll_url': res_json.get('pollurl'),
+                    'instructions': 'Redirecting to Paynow...'
+                }
+            else:
+                raise Exception(f"Paynow Error: {response.text}")
+                
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Network error: {str(e)}")
+
+class PrintingSystem:
+    def __init__(self, app=None):  # Now accepts optional app parameter
+        self.ecocash = EcoCashPayment()
+        self._init_db()
+        if app:
+            self.init_app(app)
+    
+    def init_app(self, app):
+        """For Flask application factory pattern"""
+        self.app = app
+        app.printing_system = self
+        
+    def _init_db(self):
+        """Initialize SQLite database"""
+        with sqlite3.connect('print_jobs.db') as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS print_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    reference TEXT UNIQUE,
+                    filename TEXT NOT NULL,
+                    filepath TEXT NOT NULL,
+                    pages TEXT NOT NULL,
+                    page_count INTEGER NOT NULL,
+                    copies INTEGER NOT NULL,
+                    orientation TEXT NOT NULL,
+                    ecocash_number TEXT NOT NULL,
+                    print_pass TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    status TEXT NOT NULL,
+                    poll_url TEXT,
+                    payment_reference TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    printed_at TIMESTAMP
+                )
+            """)
+            conn.commit()
+    
+    def process_print_request(self, data):
+        """Process print request with EcoCash payment"""
+        try:
+            # Validate phone number
+            if not data['ecocash'].startswith('077') and not data['ecocash'].startswith('078'):
+                raise ValueError("Only EcoCash numbers (077/078) accepted")
+            
+            # Calculate cost
+            page_info = self._parse_page_selection(data['pages'], data['totalPages'])
+            #total_cost = round(page_info['count'] * data['copies'] * float(os.getenv('ECOCOST_PER_PAGE')), 2)
+            total_cost = round(float(page_info['count']) * float(data['copies']) * float(os.getenv('ECOCOST_PER_PAGE', 0.1)), 2)
+            
+            # Generate unique reference
+            reference = f"PRINT{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            
+            # Initiate payment
+            payment_res = self.ecocash.initiate_payment(
+                phone=data['ecocash'],
+                amount=total_cost,
+                reference=reference
+            )
+            
+            if payment_res.get('status') != 'success':
+                raise Exception(payment_res.get('error', 'Payment initiation failed'))
+            
+            # Save to database
+            self._save_print_job({
+                'reference': reference,
+                'filename': data['filename'],
+                'filepath': data['filepath'],
+                'pages': ','.join(map(str, page_info['pages'])),
+                'page_count': page_info['count'],
+                'copies': data['copies'],
+                'orientation': data['orientation'],
+                'ecocash_number': data['ecocash'],
+                'print_pass': data['printpass'],
+                'amount': total_cost,
+                'status': 'pending',
+                'payment_url': payment_res.get('redirect_url'),
+                'poll_url': payment_res.get('poll_url')
+            })
+            
+            return {
+                'success': True,
+                'redirect_url': payment_res['redirect_url'],
+                'reference': reference,
+                'amount': "{:.2f}".format(total_cost)  # Format as string with 2 decimals
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+              
+    def check_payment_status(self, poll_url):
+        """Check payment status using Paynow poll URL"""
+        try:
+            headers = {
+                "Authorization": f"INTEGRATION {self.integration_key}",
+                "Content-Type": "application/json"
+            }
+            
+            #response = requests.get(poll_url, headers=headers, timeout=30)
+            response = requests.post(PAYNOW_URL, data=payload)
+            print("Raw Paynow Response:", response.text)
+            response.raise_for_status()
+            return response.json()
+        
+            
+            
+            
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Payment check failed: {str(e)}")
+    
+    def _save_print_job(self, data):
+        """Save print job to database"""
+        with sqlite3.connect('print_jobs.db') as conn:
+            conn.execute("""
+                INSERT INTO print_jobs (
+                    reference, filename, filepath, pages, page_count, copies,
+                    orientation, ecocash_number, print_pass, amount, status, poll_url
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data['reference'],
+                data['filename'],
+                data['filepath'],
+                data['pages'],
+                data['page_count'],
+                data['copies'],
+                data['orientation'],
+                data['ecocash_number'],
+                data['print_pass'],
+                data['amount'],
+                data['status'],
+                data.get('poll_url')
+            ))
+            conn.commit()
+            #return cursor.lastrowid
+    
+    def _update_print_job(self, reference, updates):
+        """Update print job status"""
+        with sqlite3.connect(DATABASE) as conn:
+            set_clause = ', '.join(f"{k} = ?" for k in updates)
+            values = list(updates.values())
+            values.append(reference)
+            
+            conn.execute(f"""
+                UPDATE print_jobs SET {set_clause} WHERE reference = ?
+            """, values)
+            conn.commit()
+    
+    def execute_print_job(self, reference):
+        """Actually send the document to the printer"""
+        # This would be platform-specific code
+        # For Linux, you might use lp or cups commands
+        # For Windows, you might use win32print
+        
+        try:
+            # Get the job details
+            with sqlite3.connect(DATABASE) as conn:
+                job = conn.execute("""
+                    SELECT * FROM print_jobs WHERE reference = ?
+                """, (reference,)).fetchone()
+            
+            if not job:
+                raise Exception("Print job not found")
+            
+            # Example for Linux (using lp command)
+            # You'll need to implement proper page selection and copies handling
+            import subprocess
+            cmd = [
+                'lp',
+                '-n', str(job['copies']),
+                '-o', f'page-ranges={job["pages"]}',
+                '-o', f'orientation-requested={job["orientation"]}',
+                job['filepath']
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                raise Exception(f"Print failed: {result.stderr}")
+            
+            # Update status
+            self._update_print_job(reference, {
+                'status': 'completed',
+                'printed_at': datetime.now().isoformat()
+            })
+            
+            return True
+        except Exception as e:
+            self._update_print_job(reference, {
+                'status': f'failed: {str(e)}'
+            })
+            raise
+
+    def _parse_page_selection(self, pages_input, total_pages):
+        """Parse page selection string into actual page numbers"""
+        try:
+            pages_input = (pages_input or '').lower().strip()
+            
+            if not pages_input or pages_input == "all":
+                pages = list(range(1, total_pages + 1))
+                return {
+                    'count': len(pages),
+                    'pages': pages,
+                    'description': 'All pages'
+                }
+            
+            if pages_input == "odd":
+                pages = [p for p in range(1, total_pages + 1) if p % 2 == 1]
+                return {
+                    'count': len(pages),
+                    'pages': pages,
+                    'description': 'Odd pages'
+                }
+            
+            if pages_input == "even":
+                pages = [p for p in range(1, total_pages + 1) if p % 2 == 0]
+                return {
+                    'count': len(pages),
+                    'pages': pages,
+                    'description': 'Even pages'
+                }
+            
+            # Handle complex page selections (1,3,5-8, etc.)
+            selected_pages = set()
+            parts = pages_input.split(',')
+            
+            for part in parts:
+                part = part.strip()
+                if '-' in part:
+                    start_end = part.split('-')
+                    if len(start_end) == 2:
+                        try:
+                            start = max(1, int(start_end[0]))
+                            end = min(total_pages, int(start_end[1]))
+                            selected_pages.update(range(start, end + 1))
+                        except ValueError:
+                            continue
+                else:
+                    try:
+                        page = int(part)
+                        if 1 <= page <= total_pages:
+                            selected_pages.add(page)
+                    except ValueError:
+                        continue
+            
+            if not selected_pages:
+                raise ValueError("No valid pages selected")
+            
+            return {
+                'count': len(selected_pages),
+                'pages': sorted(selected_pages),
+                'description': pages_input
+            }
+            
+        except Exception as e:
+            raise ValueError(f"Invalid page selection: {str(e)}")
+`
