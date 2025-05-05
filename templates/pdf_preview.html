@@ -27,7 +27,10 @@
     <div id="print-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
         <div class="modal-content w-full max-w-2xl">
             <div class="modal-header">
-                <h2 class="text-2xl font-bold">🖨️ Prime Systems Pay-to-Print</h2>
+                <h2 class="text-2xl font-bold">🖨️ Prime Systems | Pay-to-Print</h2>
+                <button id="close-modal" class="absolute top-4 right-4 text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
             </div>
             
             <div class="p-6">
@@ -105,14 +108,36 @@
                 <!-- Status Area -->
                 <div id="statusBox" class="hidden mt-6 text-center p-4 bg-blue-50 rounded-lg">
                     <div class="flex justify-center mb-3">
-                        
-                        <svg class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg id="spinnerIcon" class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v4m0 8v4m8-8h-4M4 12H0m16.24-4.24l-2.83 2.83M7.76 7.76l2.83 2.83m0 0l2.83 2.83M7.76 16.24l2.83-2.83" />
+                        </svg>
+                        <svg id="successIcon" class="hidden h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <svg id="errorIcon" class="hidden h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </div>
                     <p id="statusText" class="text-lg font-medium text-gray-700">Processing payment...</p>
+                    <div id="paymentInstructions" class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-left hidden">
+                        <p class="font-semibold mb-2">Payment Instructions:</p>
+                        <p id="instructionsText" class="text-sm">If the </p>
+                    </div>
+                    <div id="statusActions" class=" heroes mt-4 hidden">
+                        <button id="checkPaymentBtn" class="heroes px-4 py-2 bg-blue-500 text-white rounded mr-2">
+                            Check Payment Status
+                        </button>
+                        <button id="cancelBtn" class=" heroes px-4 py-2 bg-gray-300 text-gray-700 rounded">
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             </div>
+        </div>
+        <div class="floating-actions">
+            <button class="floating-btn" onclick="window.history.back()">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
         </div>
     </div>
 
@@ -123,6 +148,9 @@
         const container = document.getElementById('pdf-container');
         let totalPages = 0;
         const costPerPage = 0.10;
+        let paymentReference = null;
+        let pollUrl = null;
+        let pollTimer = null;
         
         // Initialize cost per page display
         document.getElementById('costPerPage').textContent = costPerPage.toFixed(2);
@@ -166,11 +194,20 @@
         // Modal and Form Elements
         const printBtn = document.getElementById('print-btn');
         const printModal = document.getElementById('print-modal');
+        const closeModal = document.getElementById('close-modal');
         const printForm = document.getElementById('printForm');
         const statusBox = document.getElementById('statusBox');
         const statusText = document.getElementById('statusText');
         const pagesInput = document.getElementById('pagesInput');
         const copiesInput = document.getElementById('copiesInput');
+        const spinnerIcon = document.getElementById('spinnerIcon');
+        const successIcon = document.getElementById('successIcon');
+        const errorIcon = document.getElementById('errorIcon');
+        const paymentInstructions = document.getElementById('paymentInstructions');
+        const instructionsText = document.getElementById('instructionsText');
+        const statusActions = document.getElementById('statusActions');
+        const checkPaymentBtn = document.getElementById('checkPaymentBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
         
         // Show modal when print button is clicked
         printBtn.addEventListener('click', () => {
@@ -178,10 +215,47 @@
             printModal.classList.add('flex');
         });
         
+        // Close modal
+        closeModal.addEventListener('click', () => {
+            printModal.classList.add('hidden');
+            printModal.classList.remove('flex');
+        });
+        
         // Real-time cost calculation
         pagesInput.addEventListener('input', updateCost);
         copiesInput.addEventListener('input', updateCost);
         
+        // Check payment status
+        checkPaymentBtn.addEventListener('click', checkPaymentStatus);
+        
+        // Cancel button
+        cancelBtn.addEventListener('click', () => {
+            if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+            }
+            resetForm();
+        });
+        
+        /*
+        // Save references when starting payment
+        localStorage.setItem('lastPaymentRef', paymentReference);
+        localStorage.setItem('lastPollUrl', pollUrl);
+
+        // On page load, check for pending payments
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedRef = localStorage.getItem('lastPaymentRef');
+            const savedPollUrl = localStorage.getItem('lastPollUrl');
+            
+            if (savedRef && savedPollUrl) {
+                paymentReference = savedRef;
+                pollUrl = savedPollUrl;
+                checkPaymentStatus(); // Auto-check status
+            }
+        });*/
+
+        
+
         // Submit handler
         printForm.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -203,19 +277,15 @@
                 return;
             }
         
-            // Validate minimum payment amount
-            const pageSelection = parsePageSelection(formData.pages, totalPages);
-            const totalCost = pageSelection.count * formData.copies * costPerPage;
-        
             // Show loading state
             printForm.style.display = 'none';
             statusBox.classList.remove('hidden');
-            statusText.innerHTML = `
-                <div class="text-center">
-                    <!--<i class="fas fa-spinner fa-spin text-blue-500 text-2xl mb-2"></i>-->
-                    <p>Processing your payment request...</p>
-                </div>
-            `;
+            statusText.innerHTML = 'Processing your payment request...';
+            spinnerIcon.classList.remove('hidden');
+            successIcon.classList.add('hidden');
+            errorIcon.classList.add('hidden');
+            paymentInstructions.classList.add('hidden');
+            statusActions.classList.add('hidden');
         
             try {
                 const response = await fetch('/process-print', {
@@ -223,35 +293,167 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
-        
-                const result = await response.json();
                 
-                console.log("Payment API Response:", result);
-        
+                const result = await response.json();
+                console.log("FULL SERVER RESPONSE:", result);
+
+                // ✅ Check for poll_url explicitly
+                if (!result.poll_url) {
+                    throw new Error(
+                        result.error || 
+                        "Payment gateway did not provide a status check URL. " +
+                        "Full response: " + JSON.stringify(result)
+                    );
+                }
+
                 if (!result.success) {
-                    throw new Error(result.error || "Payment processing failed");
+                    throw new Error(result.error);
                 }
         
-                // Verify redirect_url exists and is valid
-                if (!result.redirect_url || typeof result.redirect_url !== 'string') {
-                    throw new Error("Payment gateway did not provide a valid redirect URL");
+                // ✅ Store BOTH references
+                paymentReference = result.reference; // Your PRINT2025... ID
+                pollUrl = result.poll_url; // Paynow's status check URL
+                
+                console.log("REFERENCE:", paymentReference);
+                console.log("POLL URL:", pollUrl); // This should NOT be undefined
+                
+                if (!pollUrl) {
+                    throw new Error("Payment gateway did not provide a status check URL");
                 }
         
-                // Redirect to Paynow payment page
-                window.location.href = result.redirect_url;
+                // Show payment instructions
+                if (result.instructions) {
+                    paymentInstructions.classList.remove('hidden');
+                    instructionsText.textContent = result.instructions;
+                }
+                
+                // Show action buttons
+                statusActions.classList.remove('hidden');
+                
+                // Start automatic polling
+                startPolling();
+                
+                // Update status text
+                statusText.innerHTML = 'Please complete the payment on your phone';
         
             } catch (error) {
-                statusText.innerHTML = `
-                    <div class="text-red-600 p-4 bg-red-50 rounded-lg">
-                        <i class="fas fa-exclamation-circle mr-2"></i>
-                        ${error.message}
-                    </div>
-                    <button onclick="resetForm()" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded">
-                        Try Again
-                    </button>
-                `;
+                showError(error.message);
             }
         });
+        
+        // Start polling for payment status
+        function startPolling() {
+            if (pollTimer) clearTimeout(pollTimer);
+            
+            // Poll every 5 seconds
+            pollTimer = setTimeout(() => {
+                checkPaymentStatus();
+            }, 5000);
+        }
+        
+        // Check payment status
+        async function checkPaymentStatus() {
+            if (!pollUrl) {
+                showError("No payment reference available");
+                return;
+            }
+            
+            try {
+                statusText.innerHTML = 'Checking payment status...';
+                
+                const response = await fetch('/check-payment-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ poll_url: pollUrl, reference: paymentReference })
+                });
+                
+                const result = await response.json();
+                console.log("Payment Status Response:", result);
+                
+                if (!result.success) {
+                    throw new Error(result.error || "Failed to check payment status");
+                }
+                
+                if (result.status === 'Paid' || result.status === 'paid') {
+                    // Payment successful
+                    paymentSuccessful(result);
+                } else if (result.status === 'Cancelled' || result.status === 'cancelled') {
+                    // Payment cancelled
+                    showError("Transaction failed!");
+                } else {
+                    // Payment still pending, continue polling
+                    statusText.innerHTML = 'Waiting for payment confirmation...';
+                    startPolling();
+                }
+                
+            } catch (error) {
+                console.error("Payment status check error:", error);
+                statusText.innerHTML = 'Unable to verify payment status. Please try checking again.';
+            }
+        }
+        
+        // Payment successful handler
+        function paymentSuccessful(result) {
+            // Clear polling
+            if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+            }
+            
+            // Update UI
+            spinnerIcon.classList.add('hidden');
+            successIcon.classList.remove('hidden');
+            statusText.innerHTML = `
+                <div class="text-green-600 font-bold mb-2">Payment Successful!</div>
+                <div class="text-gray-600">Your document is now being printed.</div>
+                <div class="text-gray-600">Reference: ${paymentReference}</div>
+            `;
+            
+            // Hide instructions and buttons
+            paymentInstructions.classList.add('hidden');
+            statusActions.innerHTML = `
+                <button onclick="window.location.reload()" class="px-4 py-2 bg-blue-500 text-white rounded">
+                    <i class="fas fa-check mr-2"></i> Done
+                </button>
+            `;
+        }
+        
+        // Show error message
+        function showError(message) {
+            // Clear polling
+            if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+            }
+        
+            // Update UI
+            spinnerIcon.classList.add('hidden');
+            errorIcon.classList.remove('hidden');
+            
+            // Custom messages for specific cases
+            let userMessage = message;
+            if (message.includes('cancel')) {
+                userMessage = "Payment was cancelled by you";
+            } 
+            else if (message.includes('wrong pin')) {
+                userMessage = "Incorrect PIN entered. Please try again.";
+            }
+            else if (message.includes('insufficient')) {
+                userMessage = "Insufficient EcoCash balance";
+            }
+        
+            statusText.innerHTML = `
+                <div class="text-red-600 font-bold mb-2">Try Again</div>
+                <div>${userMessage}</div>
+            `;
+            
+            // Show "Try Again" button
+            statusActions.innerHTML = `
+                <button onclick="resetForm()" class="heroes px-4 py-2 bg-blue-500 text-white rounded">
+                    <i class="fas fa-redo mr-2"></i> Try Again
+                </button>
+            `;
+        }
         
         // Update cost calculation in real-time
         function updateCost() {
@@ -330,7 +532,22 @@
         function resetForm() {
             printForm.style.display = 'block';
             statusBox.classList.add('hidden');
+            paymentInstructions.classList.add('hidden');
+            statusActions.classList.add('hidden');
+            
+            // Reset icons
+            spinnerIcon.classList.remove('hidden');
+            successIcon.classList.add('hidden');
+            errorIcon.classList.add('hidden');
+            
+            // Clear any polling
+            if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+            }
         }
+
+       
     </script>
 </body>
 </html>

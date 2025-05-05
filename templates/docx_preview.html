@@ -1,47 +1,37 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Document Preview</title>
+    <meta charset="UTF-8">
+    <title>Word Document Preview</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            background: #f0f0f0;
-            font-family: Arial, sans-serif;
-        }
-
-        #header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding: 10px;
-            background: white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-
+        /* Word-specific styles */
         #docx-container {
-            max-width: 900px;
+            max-width: 800px;
             margin: 0 auto;
+            padding: 20px;
         }
-
-        .page-container {
-            margin-bottom: 20px;
+        
+        .docx-content {
             background: white;
-            padding: 30px;
+            padding: 40px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            border-radius: 8px;
             line-height: 1.6;
         }
-
-        .floating-actions {
-            position: fixed;
-            bottom: 20px;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: space-between;
-            padding: 0 20px;
+        
+        /* Preserve Word document formatting */
+        .docx-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
         }
-
+        
+        .docx-content img {
+            max-width: 100%;
+            height: auto;
+        }
+        
         .floating-btn {
             background: #172a45;
             color: white;
@@ -55,61 +45,456 @@
             align-items: center;
             gap: 8px;
         }
-
-        .floating-btn:hover {
-            background: #64ffda;
-            color: #0a192f;
-        }
-
-        .file-type-badge {
-            background: #64ffda;
-            color: #0a192f;
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-size: 0.8em;
-            margin-left: 10px;
-        }
-
-        @media print {
-            #header, .floating-actions {
-                display: none !important;
-            }
-
-            body {
-                padding: 0;
-                background: none;
-            }
-
-            .page-container {
-                margin-bottom: 0;
-                box-shadow: none;
-                page-break-after: always;
-            }
-
-            .page-container:last-child {
-                page-break-after: auto;
-            }
+        
+        .floating-actions {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
         }
     </style>
 </head>
-<body>
-    <div id="header">
-        <h2>{{ filename }} <span class="file-type-badge">DOCX Preview</span></h2>
+<body class="bg-gray-100">
+    <!-- Header -->
+    <div id="header" class="bg-white shadow p-4 text-center">
+        <h2 class="text-xl font-bold">{{ filename }} <span class="bg-blue-200 text-gray-800 px-2 py-1 rounded-md text-sm ml-2">DOCX</span></h2>
+        <input type="hidden" id="filename" value="{{ filename }}">
+        <input type="hidden" id="filepath" value="{{ file_url }}">
     </div>
 
+    <!-- Document Content -->
     <div id="docx-container">
-        <div class="page-container">
+        <div class="docx-content">
             {{ html_content | safe }}
         </div>
     </div>
 
+    <!-- Floating Actions -->
     <div class="floating-actions">
         <button class="floating-btn" onclick="window.history.back()">
             <i class="fas fa-arrow-left"></i> Back
         </button>
-        <button class="floating-btn" onclick="window.print()">
+        <button id="print-btn" class="floating-btn">
             <i class="fas fa-print"></i> Print
         </button>
     </div>
+
+    <!-- Pay-to-Print Modal -->
+    <div id="print-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg w-full max-w-2xl">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">🖨️ Pay-to-Print</h2>
+                    <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <!-- Document Summary -->
+                <div class="mb-6 bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-3 text-gray-700">Document Summary</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-gray-600">Total Pages:</p>
+                            <p class="text-lg font-semibold text-gray-800"><span id="totalPages">1</span></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Cost per Page:</p>
+                            <p class="text-lg font-semibold text-gray-800">$<span id="costPerPage">0.10</span></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Selected Pages:</p>
+                            <p class="text-lg font-semibold text-gray-800"><span id="selectedPages">All</span></p>
+                        </div>
+                        <div>
+                            <p class="text-gray-600">Total Cost:</p>
+                            <p class="text-lg font-semibold text-blue-600">$<span id="totalCost">0.10</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Print Form -->
+                <form id="printForm" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block font-medium text-gray-700 mb-1">Select Pages:</label>
+                            <input type="text" id="pagesInput" name="pages" placeholder="e.g., 1,2,5 or odd or even" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block font-medium text-gray-700 mb-1">Number of Copies:</label>
+                            <input type="number" id="copiesInput" name="copies" value="1" min="1" 
+                                   class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium text-gray-700 mb-1">Orientation:</label>
+                        <select name="orientation" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="portrait" selected>Portrait</option>
+                            <option value="landscape">Landscape</option>
+                        </select>
+                    </div>
+
+                    <!-- Payment Section -->
+                    <div class="border-t pt-4 mt-4">
+                        <h3 class="text-lg font-semibold mb-3 text-gray-700">Payment Method</h3>
+                        <div class="payment-option">
+                            <div>
+                                <label class="block font-medium text-gray-700 mb-1">EcoCash Number:</label>
+                                <input type="text" name="ecocash" placeholder="077xxxxxxx" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div class="mt-3">
+                                <label class="block font-medium text-gray-700 mb-1">Print Pass:</label>
+                                <input type="text" name="printpass" placeholder="Enter print pass" 
+                                       class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg font-medium mt-6">
+                        Proceed to Pay & Print <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </form>
+
+                <!-- Status Area -->
+                <div id="statusBox" class="hidden mt-6 text-center p-4 bg-blue-50 rounded-lg">
+                    <div class="flex justify-center mb-3">
+                        <svg id="spinnerIcon" class="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v4m0 8v4m8-8h-4M4 12H0m16.24-4.24l-2.83 2.83M7.76 7.76l2.83 2.83m0 0l2.83 2.83M7.76 16.24l2.83-2.83" />
+                        </svg>
+                        <svg id="successIcon" class="hidden h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <svg id="errorIcon" class="hidden h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </div>
+                    <p id="statusText" class="text-lg font-medium text-gray-700">Processing payment...</p>
+                    <div id="paymentInstructions" class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-left hidden">
+                        <p class="font-semibold mb-2">Payment Instructions:</p>
+                        <p id="instructionsText"></p>
+                    </div>
+                    <div id="statusActions" class="mt-4 hidden">
+                        <button id="checkPaymentBtn" class="px-4 py-2 bg-blue-500 text-white rounded mr-2">
+                            Check Payment Status
+                        </button>
+                        <button id="cancelBtn" class="px-4 py-2 bg-gray-300 text-gray-700 rounded">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Self-contained JavaScript -->
+    <script>
+        // Configuration
+        const config = {
+            costPerPage: 0.10
+        };
+        
+        // State
+        const state = {
+            paymentReference: null,
+            pollUrl: null,
+            pollTimer: null,
+            totalPages: 1
+        };
+
+        // DOM Elements
+        const elements = {
+            printBtn: document.getElementById('print-btn'),
+            printModal: document.getElementById('print-modal'),
+            closeModal: document.getElementById('close-modal'),
+            printForm: document.getElementById('printForm'),
+            statusBox: document.getElementById('statusBox'),
+            statusText: document.getElementById('statusText'),
+            spinnerIcon: document.getElementById('spinnerIcon'),
+            successIcon: document.getElementById('successIcon'),
+            errorIcon: document.getElementById('errorIcon'),
+            paymentInstructions: document.getElementById('paymentInstructions'),
+            instructionsText: document.getElementById('instructionsText'),
+            statusActions: document.getElementById('statusActions'),
+            pagesInput: document.getElementById('pagesInput'),
+            copiesInput: document.getElementById('copiesInput'),
+            totalCost: document.getElementById('totalCost'),
+            selectedPages: document.getElementById('selectedPages')
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set initial values
+            document.getElementById('costPerPage').textContent = config.costPerPage.toFixed(2);
+            updateCost();
+            
+            // Event listeners
+            elements.printBtn.addEventListener('click', () => {
+                elements.printModal.classList.remove('hidden');
+                elements.printModal.classList.add('flex');
+            });
+            
+            elements.closeModal.addEventListener('click', () => {
+                elements.printModal.classList.add('hidden');
+                elements.printModal.classList.remove('flex');
+            });
+            
+            elements.pagesInput.addEventListener('input', updateCost);
+            elements.copiesInput.addEventListener('input', updateCost);
+            
+            elements.printForm.addEventListener('submit', handlePrintSubmit);
+        });
+
+        // Update cost calculation
+        function updateCost() {
+            const pagesInputValue = elements.pagesInput.value.trim().toLowerCase();
+            const copies = parseInt(elements.copiesInput.value) || 1;
+            
+            const selection = parsePageSelection(pagesInputValue, state.totalPages);
+            const totalCost = (selection.count * copies * config.costPerPage).toFixed(2);
+            
+            elements.totalCost.textContent = totalCost;
+            elements.selectedPages.textContent = selection.description || "All";
+        }
+
+        // Parse page selection string
+        function parsePageSelection(pagesInput, total) {
+            if (!pagesInput || pagesInput === "all") {
+                return {
+                    count: total,
+                    description: "All pages",
+                    pages: Array.from({length: total}, (_, i) => i + 1)
+                };
+            }
+            
+            if (pagesInput === "odd") {
+                const pages = Array.from({length: total}, (_, i) => i + 1).filter(p => p % 2 === 1);
+                return {
+                    count: pages.length,
+                    description: "Odd pages",
+                    pages: pages
+                };
+            }
+            
+            if (pagesInput === "even") {
+                const pages = Array.from({length: total}, (_, i) => i + 1).filter(p => p % 2 === 0);
+                return {
+                    count: pages.length,
+                    description: "Even pages",
+                    pages: pages
+                };
+            }
+            
+            // Handle complex page selections (1,3,5-8, etc.)
+            const pages = new Set();
+            const parts = pagesInput.split(',');
+            let descriptionParts = [];
+            
+            for (const part of parts) {
+                const trimmed = part.trim();
+                if (trimmed.includes('-')) {
+                    const [start, end] = trimmed.split('-').map(Number);
+                    if (!isNaN(start) && !isNaN(end) && start <= end) {
+                        for (let i = start; i <= end; i++) {
+                            if (i > 0 && i <= total) pages.add(i);
+                        }
+                        descriptionParts.push(`${start}-${end}`);
+                    }
+                } else {
+                    const num = parseInt(trimmed);
+                    if (!isNaN(num) && num > 0 && num <= total) {
+                        pages.add(num);
+                        descriptionParts.push(num.toString());
+                    }
+                }
+            }
+            
+            return {
+                count: pages.size,
+                description: descriptionParts.join(", "),
+                pages: Array.from(pages).sort((a, b) => a - b)
+            };
+        }
+
+        // Handle form submission
+        async function handlePrintSubmit(e) {
+            e.preventDefault();
+            
+            const formData = {
+                copies: parseInt(elements.copiesInput.value) || 1,
+                pages: elements.pagesInput.value.trim().toLowerCase(),
+                orientation: elements.printForm.orientation.value,
+                ecocash: elements.printForm.ecocash.value.trim(),
+                printpass: elements.printForm.printpass.value.trim(),
+                filename: document.getElementById('filename').value,
+                filepath: document.getElementById('filepath').value,
+                totalPages: state.totalPages
+            };
+
+            // Validate EcoCash number
+            if (!/^07[78]\d{7}$/.test(formData.ecocash)) {
+                showError('Please enter a valid Zimbabwean EcoCash number (077/078 followed by 7 digits)');
+                return;
+            }
+
+            showLoadingState();
+
+            try {
+                const response = await fetch('/process-print', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || "Payment processing failed");
+                }
+
+                state.paymentReference = result.reference;
+                state.pollUrl = result.poll_url;
+                
+                showPaymentInstructions(result.instructions);
+                startPolling();
+
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        // Start polling for payment status
+        function startPolling() {
+            if (state.pollTimer) clearTimeout(state.pollTimer);
+            
+            state.pollTimer = setTimeout(() => {
+                checkPaymentStatus();
+            }, 5000);
+        }
+
+        // Check payment status
+        async function checkPaymentStatus() {
+            if (!state.pollUrl) {
+                showError("Payment reference missing");
+                return;
+            }
+
+            try {
+                updateStatusText('Checking payment status...');
+                
+                const response = await fetch('/check-payment-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        poll_url: state.pollUrl, 
+                        reference: state.paymentReference 
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || "Status check failed");
+                }
+
+                handlePaymentResponse(result);
+
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        // Handle payment response
+        function handlePaymentResponse(result) {
+            const status = (result.status || '').toLowerCase();
+            
+            if (status.includes('paid')) {
+                showPaymentSuccess(result);
+            } 
+            else if (status.includes('cancel') || status.includes('failed')) {
+                showError("Payment was cancelled");
+            }
+            else if (status.includes('error') || status.includes('invalid')) {
+                showError("Payment failed (wrong PIN or insufficient funds)");
+            }
+            else {
+                updateStatusText('Waiting for payment confirmation...');
+                startPolling();
+            }
+        }
+
+        // UI Helpers
+        function showLoadingState() {
+            elements.printForm.style.display = 'none';
+            elements.statusBox.classList.remove('hidden');
+            updateStatusText('Processing your payment request...');
+            toggleIcons('spinner');
+        }
+
+        function showPaymentInstructions(instructions) {
+            if (instructions) {
+                elements.paymentInstructions.classList.remove('hidden');
+                elements.instructionsText.textContent = instructions;
+            }
+        }
+
+        function showPaymentSuccess() {
+            clearTimeout(state.pollTimer);
+            toggleIcons('success');
+            updateStatusText(`
+                <div class="text-green-600 font-bold mb-2">Payment Successful!</div>
+                <div class="text-gray-600">Your document is being printed.</div>
+                <div class="text-gray-600">Reference: ${state.paymentReference}</div>
+            `);
+            elements.statusActions.innerHTML = `
+                <button onclick="window.location.reload()" class="px-4 py-2 bg-blue-500 text-white rounded">
+                    <i class="fas fa-check mr-2"></i> Done
+                </button>
+            `;
+        }
+
+        function showError(message) {
+            clearTimeout(state.pollTimer);
+            toggleIcons('error');
+            
+            let userMessage = message;
+            if (message.includes('cancel')) userMessage = "Payment was cancelled";
+            if (message.includes('wrong pin')) userMessage = "Incorrect PIN entered";
+            if (message.includes('insufficient')) userMessage = "Insufficient funds";
+            
+            updateStatusText(`
+                <div class="text-red-600 font-bold mb-2">Error</div>
+                <div>${userMessage}</div>
+            `);
+            elements.statusActions.innerHTML = `
+                <button onclick="resetForm()" class="px-4 py-2 bg-blue-500 text-white rounded">
+                    <i class="fas fa-redo mr-2"></i> Try Again
+                </button>
+            `;
+        }
+
+        function toggleIcons(iconToShow) {
+            ['spinner', 'success', 'error'].forEach(icon => {
+                elements[`${icon}Icon`].classList.toggle('hidden', icon !== iconToShow);
+            });
+        }
+
+        function updateStatusText(html) {
+            elements.statusText.innerHTML = html;
+        }
+
+        function resetForm() {
+            elements.printForm.style.display = 'block';
+            elements.statusBox.classList.add('hidden');
+            elements.paymentInstructions.classList.add('hidden');
+            toggleIcons('spinner');
+            clearTimeout(state.pollTimer);
+        }
+    </script>
 </body>
 </html>

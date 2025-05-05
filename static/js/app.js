@@ -67,7 +67,7 @@ function renderFiles(files) {
                 ${file.name}
             </td>
             <td>${file.type.toUpperCase()}</td>
-            <td>${file.pages || '--'}</td>
+            <!--<td>${file.pages || '--'}</td>-->
 
             <td>
                 <button class="file-btn" onclick="previewFile('${escapePath(file.path)}')">

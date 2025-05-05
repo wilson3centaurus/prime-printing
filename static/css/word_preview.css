@@ -1,0 +1,22 @@
+/* Word document styles */
+#docx-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.page-container {
+    background: white;
+    padding: 40px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    line-height: 1.6;
+}
+
+/* Preserve Word document formatting */
+.page-container table {
+    border-collapse: collapse;
+    width: 100%;
+}
+.page-container img {
+    max-width: 100%;
+}

@@ -26,7 +26,7 @@ class EcoCashPayment:
             response = self.paynow.send_mobile(payment, phone, 'ecocash')
 
             # Debug the actual response values
-            print("RAW RESPONSE:", response.__dict__)
+            # print("RAW RESPONSE:", response.__dict__)
             
             if not response.success:
                 error = getattr(response, 'error', 'Payment initiation failed')
@@ -69,6 +69,7 @@ class EcoCashPayment:
                 'poll_url': response.poll_url,
                 'instructions': instructions
             }
+
 
         except Exception as e:
             raise Exception(f"Payment processing failed: {str(e)}") 
@@ -122,6 +123,8 @@ class PrintingSystem:
 
             reference = f"PRINT{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
+            
+        
             payment_res = self.ecocash.initiate_payment(
                 phone=data['ecocash'],
                 amount=total_cost,
@@ -129,7 +132,10 @@ class PrintingSystem:
             )
 
             # Debug the payment response
-            print("PAYMENT RESPONSE:", payment_res)
+            # print("PAYMENT RESPONSE:", payment_res)
+            
+            if not payment_res.get('poll_url'):
+                raise ValueError("Paynow did not provide a poll_url")
             
             # Validate the redirect URL exists and is a string
             redirect_url = payment_res.get('redirect_url')
@@ -148,13 +154,15 @@ class PrintingSystem:
                 'print_pass': data['printpass'],
                 'amount': total_cost,
                 'status': 'pending',
-                'poll_url': payment_res.get('poll_url')
+                #'poll_url': payment_res.get('poll_url')
+                'poll_url': payment_res['poll_url'] 
             })
 
             return {
                 'success': True,
                 'redirect_url': redirect_url,
                 'reference': reference,
+                'poll_url': payment_res['poll_url'],
                 'amount': "{:.2f}".format(total_cost),
                 'instructions': payment_res.get('instructions', '')
             }
@@ -166,25 +174,50 @@ class PrintingSystem:
             }
 
                
+    # Fix for the check_payment_status method in PrintingSystem class
+
     def check_payment_status(self, poll_url):
         """Check payment status using Paynow SDK"""
         try:
-            status = paynow.poll_transaction(poll_url)
-
-            if not status.success:
-                raise Exception(f"Failed to poll transaction status: {status.message}")
-
+            # Make sure the paynow instance is initialized
+            if not hasattr(self, 'ecocash') or not hasattr(self.ecocash, 'paynow'):
+                raise Exception("Payment system not properly initialized")
+            
+            # Use the paynow SDK to check the status
+            status = self.ecocash.paynow.check_transaction_status(poll_url)
+            
+            # Check if the status object has the expected properties
+            if not hasattr(status, 'status'):
+                # Log the actual response for debugging
+                print(f"Unexpected response format: {status.__dict__}")
+                
+                # Try to extract status from different attributes
+                actual_status = None
+                if hasattr(status, 'data') and isinstance(status.data, dict):
+                    actual_status = status.data.get('status')
+                
+                if not actual_status:
+                    raise Exception("Could not determine payment status")
+                
+                # Return a standardized response
+                return {
+                    'status': actual_status,
+                    'amount': getattr(status, 'amount', '0.00'),
+                    'reference': getattr(status, 'reference', 'Unknown')
+                }
+            
+            # Return a standardized response with all available information
             return {
-                'status': status.status,  # e.g., "Paid", "Cancelled", "Awaiting Delivery"
-                'amount': status.amount,
-                'reference': status.reference,
-                'paid_at': status.paid_at
+                'status': status.status,
+                'amount': getattr(status, 'amount', '0.00'),
+                'reference': getattr(status, 'reference', 'Unknown'),
+                'paid_at': getattr(status, 'paid_at', None)
             }
 
         except Exception as e:
+            print(f"Payment status check error: {str(e)}")
             raise Exception(f"Payment check failed: {str(e)}")
-
-    
+        
     def _save_print_job(self, data):
         """Save print job to database"""
         with sqlite3.connect('print_jobs.db') as conn:
